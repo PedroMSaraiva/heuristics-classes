@@ -1,0 +1,26 @@
+=== Resultados Detalhados dos Experimentos ===
+
+Hill Climbing:
+• Taxa de Sucesso: 18.00%
+• Média de Iterações: 5.29 ± 1.98
+• Tempo Médio: 0.0006s ± 0.0002s
+• Iterações (min/max): 1/10
+• Tempo (min/max): 0.0002s/0.0011s
+• Taxa de Mínimo Local: 82.00%
+• Média de Conflitos: 1.23 ± 0.76
+
+Simulated Annealing:
+• Taxa de Sucesso: 94.00%
+• Média de Iterações: 862.64 ± 497.89
+• Tempo Médio: 0.0043s ± 0.0025s
+• Iterações (min/max): 182/2000
+• Tempo (min/max): 0.0009s/0.0102s
+• Média de Conflitos: 0.06 ± 0.24
+
+Tempo Total de Execução: 0.50s
+
+Exemplo de Solução (Hill Climbing):
+[3, 6, 0, 7, 4, 1, 5, 2]
+
+Exemplo de Solução (Simulated Annealing):
+[4, 6, 1, 3, 7, 0, 2, 5]
