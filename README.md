@@ -17,12 +17,12 @@ Foram implementados dois algoritmos de busca local para resolver o problema:
    - Algoritmo que sempre move para o estado vizinho com menor número de conflitos
    - Pode ficar preso em mínimos locais
    - Implementação mais simples e rápida
-![GIF do Hill Climbing](./atividade1/hill_climbing.gif)
+![GIF do Hill Climbing](./atividade1/media/hill_climbing.gif)
 2. **Simulated Annealing**
    - Algoritmo que permite movimentos para estados piores com uma probabilidade que diminui ao longo do tempo
    - Maior chance de escapar de mínimos locais
    - Implementação mais complexa mas com maior taxa de sucesso
-![GIF do Simulated Annealing](./atividade1/simulated_annealing.gif)
+![GIF do Simulated Annealing](./atividade1/media/simulated_annealing.gif)
 
 #### Estrutura do Projeto
 
