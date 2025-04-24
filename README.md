@@ -65,6 +65,42 @@ python atividade1/experiments.py
      - Tempo médio de execução
      - Gráficos comparativos
 
+### :package: Atividade 4 - Problema da Mochila com Algoritmo Genético
+
+A quarta atividade aborda o clássico Problema da Mochila (Knapsack Problem) utilizando um Algoritmo Genético implementado com a biblioteca MEALPY. O objetivo é selecionar itens com diferentes pesos e valores para maximizar o valor total sem exceder a capacidade da mochila.
+
+#### Solução Implementada
+
+Implementação de um algoritmo genético utilizando MEALPY com:
+
+- **Representação binária**: Cada item é representado por um bit (0 ou 1)
+- **Seleção por torneio**: Método de seleção de indivíduos para reprodução
+- **Experimentação com diferentes parâmetros**: Taxa de mutação, crossover e tamanho da população
+- **Análise de elitismo**: Comparação entre execuções com e sem preservação dos melhores indivíduos
+
+![Comparação das Melhores Soluções](./atividade4/visualizations/solutions_comparison_grid.png)
+
+#### Estrutura do Projeto
+
+```
+atividade4/
+├── main.py            # Implementação principal do algoritmo genético
+├── visualizations/    # Visualizações e gráficos gerados
+└── README.md          # Descrição detalhada da atividade
+```
+
+#### Como Executar
+
+1. Instale as dependências:
+```bash
+pip install numpy pandas matplotlib seaborn mealpy rich
+```
+
+2. Execute o algoritmo:
+```bash
+python atividade4/main.py
+```
+
 ## Grupo
 
 - Carlos Henrique
