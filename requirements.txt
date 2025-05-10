@@ -1,5 +1,10 @@
 numpy==1.24.3
 matplotlib==3.7.1
-python-tk==0.1.0
 Pillow==9.5.0
-seaborn==0.12.2 
+seaborn==0.12.2
+scikit-learn==1.1.1
+python-tk==0.1.0       # Usado pelo matplotlib
+#   • Linux (Debian/Ubuntu): sudo apt install python3-tk
+#   • Linux (Fedora/CentOS): sudo dnf install python3-tkinter
+#   • Windows: selecione "tcl/tk and IDLE" durante a instalação oficial do Python ou, em ambientes Conda, use conda install tk
+#   • MacOS: o Tkinter já vem instalado com o Python, mas você pode instalar o Homebrew e usar brew install python-tk
