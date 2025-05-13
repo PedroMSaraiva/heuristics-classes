@@ -1,0 +1,4 @@
+Config,Best_Fitness_mean,Best_Fitness_std,Best_Fitness_median,Best_Fitness_min,Best_Fitness_max,Best_Fitness_<lambda_0>,Best_Fitness_<lambda_1>,Final_Exploration_mean,Final_Exploitation_mean
+Config 1,74466.9862,68114.2805,48418.1208,497.7819,258374.7268,1.0805,0.3634,7.5661,92.4339
+Config 2,33411.0379,36474.1533,19413.9035,1533.7054,141874.2546,1.589,1.899,10.0703,89.9297
+Config 3,15422.824,25767.5758,3676.2298,320.7023,118234.9566,2.8267,7.8342,13.1249,86.8751
