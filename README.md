@@ -85,7 +85,7 @@ Implementação de um algoritmo genético utilizando MEALPY com:
 
 **Função f1 (High Conditioned Elliptic):**
 
-![F1](.atividade5\results\GA_f1\resultados_comparacao_GA_f6.png)
+![F1](./atividade5\results\GA_f1\resultados_comparacao_GA_f6.png)
 
 * **GA:** Convergência rápida, sensível à população. Exploração inicial boa, mas explotação precoce leva à estagnação.
 * **PSO:** Convergência muito rápida, melhor resultado com configuração intermediária. Exploração inicial eficiente, mas também explotação precoce.
@@ -93,7 +93,7 @@ Implementação de um algoritmo genético utilizando MEALPY com:
 
 **Função f6 (Shifted and Rotated Weierstrass):**
 
-![F6](.atividade5\results\GA_f6\resultados_comparacao_GA_f6.png)
+![F6](./atividade5\results\GA_f6\resultados_comparacao_GA_f6.png)
 
 
 * **GA:** Convergência rápida para mínimos locais devido à exploração limitada. Aumentar recursos traz pouca melhora.
