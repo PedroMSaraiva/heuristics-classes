@@ -80,6 +80,38 @@ Implementação de um algoritmo genético utilizando MEALPY com:
 
 ![Comparação das Melhores Soluções](./atividade4/visualizations/solutions_comparison_grid.png)
 
+
+### Atividade 5 - Particle Swarm Optimization e Genetic Algorithms
+
+**Função f1 (High Conditioned Elliptic):**
+
+![F1](./atividade5/results/GA_f1/resultados_comparacao_GA_f1.png)
+
+* **GA:** Convergência rápida, sensível à população. Exploração inicial boa, mas explotação precoce leva à estagnação.
+* **PSO:** Convergência muito rápida, melhor resultado com configuração intermediária. Exploração inicial eficiente, mas também explotação precoce.
+* **Comparação:** PSO converge mais rápido inicialmente. Ambos perdem diversidade cedo, limitando a otimização.
+
+**Função f6 (Shifted and Rotated Weierstrass):**
+
+![F6](./atividade5/results/GA_f6/resultados_comparacao_GA_f6.png)
+
+
+* **GA:** Convergência rápida para mínimos locais devido à exploração limitada. Aumentar recursos traz pouca melhora.
+* **PSO:** Similar ao GA, converge rápido para mínimos locais. Mais recursos ajudam marginalmente, mas exploração continua insuficiente.
+* **Comparação:** Comportamento similar, ambos lutam com a multimodalidade pela perda rápida de exploração.
+
+**Avaliação Crítica Geral:**
+
+* Ambos (GA e PSO) sofrem de convergência prematura e exploração limitada nas funções complexas.
+* Desempenho dependente da configuração dos parâmetros.
+* Para f1, PSO teve convergência inicial mais rápida.
+* Para f6, nenhum dos dois otimizou bem devido à dificuldade em escapar de mínimos locais.
+
+**Comparação com Outros Algoritmos Evolucionários:**
+
+Algoritmos com niching ou adaptação de parâmetros seriam mais adequados para funções multimodais. A falta de manutenção de diversidade é uma limitação chave do GA e PSO aqui.
+
+
 #### Estrutura do Projeto
 
 ```
