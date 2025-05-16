@@ -1,0 +1,5 @@
+*.logs
+**/logs
+**/.numba_cache
+**/__pycache__
+*.pdf

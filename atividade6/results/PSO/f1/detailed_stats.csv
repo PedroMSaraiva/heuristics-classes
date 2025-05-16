@@ -1,0 +1,4 @@
+Config,Best_Fitness_mean,Best_Fitness_std,Best_Fitness_median,Best_Fitness_min,Best_Fitness_max,Best_Fitness_<lambda_0>,Best_Fitness_<lambda_1>,Execution_Time_mean,Execution_Time_std,Execution_Time_min,Execution_Time_max
+Config 1,0.0,0.0,0.0,0.0,0.0,0.359396,-1.5,10.981706,0.207833,10.741838,11.108134
+Config 2,0.0,0.0,0.0,0.0,0.0,0.674699,,64.38986,0.205501,64.225136,64.620142
+Config 3,0.0,0.0,0.0,0.0,0.0,,,264.005676,0.191298,263.805955,264.187259
