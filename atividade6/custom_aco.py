@@ -24,24 +24,25 @@ def _select_agent_idx_numba(weights, rand_val):
 # Numba-jitted helper function to calculate sigma for a specific dimension
 @njit
 def _calculate_sigma_for_dim_j_numba(solutions_col_j, zeta, pop_size_for_logic):
-    sigma_sum = 0.0
     n_agents_in_col = len(solutions_col_j)
 
     if n_agents_in_col == 0:
         return 0.0  # Should not happen if population is valid
-    if n_agents_in_col == 1: # Or if pop_size_for_logic is 1
+    
+    # Se pop_size_for_logic (que é self.pop_size do algoritmo) for 1, 
+    # ou se houver apenas uma solução na coluna (o que implicaria pop_size_for_logic=1 ou erro),
+    # o comportamento original era retornar zeta. Isso é para evitar divisão por zero ou comportamento indefinido.
+    if pop_size_for_logic <= 1 or n_agents_in_col <=1:
         return zeta
 
-    for i in range(n_agents_in_col):
-        current_val = solutions_col_j[i]
-        # Circular difference
-        prev_val = solutions_col_j[i - 1] if i > 0 else solutions_col_j[n_agents_in_col - 1]
-        sigma_sum += np.abs(current_val - prev_val)
+    # Vectorized calculation of circular differences
+    # np.roll(solutions_col_j, 1) faz o shift circular para pegar o elemento anterior (o último para o primeiro)
+    diffs = np.abs(solutions_col_j - np.roll(solutions_col_j, 1))
+    sigma_sum = np.sum(diffs)
     
-    if pop_size_for_logic > 1:
-        return zeta * sigma_sum / (pop_size_for_logic - 1.0)
-    else: # pop_size_for_logic is 1
-        return zeta
+    # A fórmula original era zeta * sigma_sum / (pop_size_for_logic - 1.0)
+    # Garantir que pop_size_for_logic - 1.0 não seja zero já foi tratado acima.
+    return zeta * sigma_sum / (pop_size_for_logic - 1.0)
 
 # Main Numba-jitted function to generate a single child solution vector
 @njit
@@ -79,12 +80,12 @@ class CustomACOR(Optimizer):
         European journal of operational research, 185(3), pp.1155-1173.
     """
 
-    def __init__(self, epoch=10000, pop_size=50, sample_count=50, intent_factor=0.5, zeta=1.0, **kwargs):
+    def __init__(self, epoch=10000, pop_size=50, sample_count=30, intent_factor=0.5, zeta=1.0, **kwargs):
         """
         Args:
             epoch (int): maximum number of iterations, default = 10000
             pop_size (int): number of population size, default = 50
-            sample_count (int): Number of Newly Generated Sample Points, default = 50
+            sample_count (int): Number of Newly Generated Sample Points, default = 30
             intent_factor (float): Intensification Factor (Selection Pressure), default = 0.5
             zeta (float): Deviation-Distance Ratio, default = 1.0
         """

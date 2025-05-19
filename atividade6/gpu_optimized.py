@@ -360,7 +360,6 @@ def train_model_optimized(model="PSO", problem="f6", config_idx=0, run_id=0):
         "verbose": False,  # Reduzir saída para melhorar desempenho
         "log_to": "console", 
         "save_population": True,  # Necessário para visualizações
-        "max_early_stop": 50  # Reduzido para melhor performance
     }
     
     main_problem = {}
@@ -430,26 +429,30 @@ def train_model_optimized(model="PSO", problem="f6", config_idx=0, run_id=0):
     solve_start = time.time()
     
     try:
-        best_agent = algorithm.solve(main_problem)
+        # Configurar o dicionário de terminação para early stopping
+        term_dict = {
+            "max_early_stop": 100  # Mantendo o valor anterior, ajuste conforme necessário
+        }
+        best_agent = algorithm.solve(main_problem, termination=term_dict)
         solve_time = time.time() - solve_start
         
         best_position = best_agent.solution
         best_fitness = best_agent.target.fitness
         
         # Criar diretórios para resultados
-        main_path = f"results/{model}/{problem}"
+        main_path = f"results/{model}/{problem}/Config{config_idx + 1}"
         os.makedirs(main_path, exist_ok=True)
         
         # Salvar gráficos da execução
         base_title = f"{model} - {problem} - {config['name']} - Run {run_id}"
         try:
-            algorithm.history.save_global_objectives_chart(filename=f"{main_path}/goc_{config_idx}_{run_id}", title=f"{base_title} - Global Objectives Chart")
-            algorithm.history.save_local_objectives_chart(filename=f"{main_path}/loc_{config_idx}_{run_id}", title=f"{base_title} - Local Objectives Chart")
-            algorithm.history.save_global_best_fitness_chart(filename=f"{main_path}/gbfc_{config_idx}_{run_id}", title=f"{base_title} - Global Best Fitness Chart")
-            algorithm.history.save_local_best_fitness_chart(filename=f"{main_path}/lbfc_{config_idx}_{run_id}", title=f"{base_title} - Local Best Fitness Chart")
-            algorithm.history.save_runtime_chart(filename=f"{main_path}/rtc_{config_idx}_{run_id}", title=f"{base_title} - Runtime Chart")
-            algorithm.history.save_exploration_exploitation_chart(filename=f"{main_path}/eec_{config_idx}_{run_id}", title=f"{base_title} - Exploration Exploitation Chart")
-            algorithm.history.save_diversity_chart(filename=f"{main_path}/dc_{config_idx}_{run_id}", title=f"{base_title} - Diversity Chart")
+            algorithm.history.save_global_objectives_chart(filename=f"{main_path}/goc_{config_idx}_{run_id}", title=f"{base_title} - Global Objectives Chart", verbose=False)
+            algorithm.history.save_local_objectives_chart(filename=f"{main_path}/loc_{config_idx}_{run_id}", title=f"{base_title} - Local Objectives Chart", verbose=False)
+            algorithm.history.save_global_best_fitness_chart(filename=f"{main_path}/gbfc_{config_idx}_{run_id}", title=f"{base_title} - Global Best Fitness Chart", verbose=False)
+            algorithm.history.save_local_best_fitness_chart(filename=f"{main_path}/lbfc_{config_idx}_{run_id}", title=f"{base_title} - Local Best Fitness Chart", verbose=False)
+            algorithm.history.save_runtime_chart(filename=f"{main_path}/rtc_{config_idx}_{run_id}", title=f"{base_title} - Runtime Chart", verbose=False)
+            algorithm.history.save_exploration_exploitation_chart(filename=f"{main_path}/eec_{config_idx}_{run_id}", title=f"{base_title} - Exploration Exploitation Chart", verbose=False)
+            algorithm.history.save_diversity_chart(filename=f"{main_path}/dc_{config_idx}_{run_id}", title=f"{base_title} - Diversity Chart", verbose=False)
             
             # Salvar trajetória apenas se houver agentes suficientes
             if algorithm.pop_size > 7:
@@ -1130,13 +1133,15 @@ if __name__ == "__main__":
         os.makedirs("results", exist_ok=True)
         
         # Definir modelos e problemas a serem executados
-        MODELS = ["ACO", 
-                  #"PSO"
+        MODELS = ["PSO", 
+                  "ACO"
                   ]  # Usando nossa versão personalizada do ACO e PSO
-        PROBLEMS = ["f1", "f6"]
+        PROBLEMS = ["f1", 
+                    "f6"
+                    ]
         
         # Para teste rápido, use valores menores
-        NUM_RUNS = 4  # 3 execuções por configuração
+        NUM_RUNS = 30  # 3 execuções por configuração
         logger.info(f"Iniciando execução principal com {NUM_RUNS} execuções")
         
         # Criar diretórios para cada modelo e problema
