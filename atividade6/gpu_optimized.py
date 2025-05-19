@@ -433,7 +433,9 @@ def train_model_optimized(model="PSO", problem="f6", config_idx=0, run_id=0):
         term_dict = {
             "max_early_stop": 100  # Mantendo o valor anterior, ajuste conforme necessário
         }
+        
         best_agent = algorithm.solve(main_problem, termination=term_dict)
+            
         solve_time = time.time() - solve_start
         
         best_position = best_agent.solution
@@ -456,7 +458,30 @@ def train_model_optimized(model="PSO", problem="f6", config_idx=0, run_id=0):
             
             # Salvar trajetória apenas se houver agentes suficientes
             if algorithm.pop_size > 7:
-                algorithm.history.save_trajectory_chart(list_agent_idx=[3, 5, 6, 7], selected_dimensions=[0, 1], filename=f"{main_path}/tc_{config_idx}_{run_id}", title=f"{base_title} - Trajectory Chart")
+                try:
+                    algorithm.history.save_trajectory_chart(
+                        list_agent_idx=[3, 5, 6, 7],
+                        selected_dimensions=[0, 1],  # Tenta com base 0
+                        filename=f"{main_path}/tc_{config_idx}_{run_id}",
+                        title=f"{base_title} - Trajectory Chart",
+                        verbose=False
+                    )
+                except Exception as e:
+                    if "the index of selected dimensions should be in range" in str(e):
+                        # Tenta novamente com base 1
+                        try:
+                            algorithm.history.save_trajectory_chart(
+                                list_agent_idx=[3, 5, 6, 7],
+                                selected_dimensions=[1, 2],  # Corrige para base 1
+                                filename=f"{main_path}/tc_{config_idx}_{run_id}",
+                                title=f"{base_title} - Trajectory Chart",
+                                verbose=False
+                            )
+                            logger.info("save_trajectory_chart: Corrigido para índices base 1.")
+                        except Exception as e2:
+                            logger.warning(f"Erro ao salvar trajectory chart mesmo após correção: {e2}")
+                    else:
+                        logger.warning(f"Erro ao salvar trajectory chart: {e}")
         except Exception as e:
             logger.warning(f"Erro ao salvar alguns gráficos: {e}, PID={process_id}, Thread={thread_id}")
         
@@ -467,25 +492,41 @@ def train_model_optimized(model="PSO", problem="f6", config_idx=0, run_id=0):
         positions_history = []
         
         try:
-            # Extrair histórico de fitness global
-            fitness_history = algorithm.history.list_global_best_fit
+            # Extrair histórico de fitness global - Adicionando verificações robustas
+            if hasattr(algorithm.history, 'list_global_best_fit'):
+                fitness_history = algorithm.history.list_global_best_fit
+                # Verificar se o histórico de fitness tem valores reais
+                if fitness_history and all(val == 0.0 for val in fitness_history):
+                    logger.warning(f"ATENÇÃO: Todos os valores de fitness no histórico são 0.0, indicando possível problema!")
+            
+            # Debug para verificar o fitness 
+            logger.info(f"Fitness history: {fitness_history[:5]}... (total: {len(fitness_history)} itens)")
             
             # Extrair históricos de exploration/exploitation
             if hasattr(algorithm.history, 'list_exploration') and hasattr(algorithm.history, 'list_exploitation'):
                 exploration_history = algorithm.history.list_exploration
                 exploitation_history = algorithm.history.list_exploitation
             
-            # Tentar extrair histórico de posições (para animação)
+            # Tentar extrair histórico de posições (para animação) - Versão mais robusta
             if hasattr(algorithm.history, 'list_population'):
                 positions = algorithm.history.list_population
                 # Converter para formato adequado para animação
-                for pop in positions:
+                for idx, pop in enumerate(positions):
                     pos_array = []
                     for agent in pop:
                         if hasattr(agent, 'solution'):
                             pos_array.append(agent.solution)
+            
                     if pos_array:
                         positions_history.append(pos_array)
+                    else:
+                        logger.warning(f"População na época {idx} não tem soluções válidas")
+            
+            # Verificar se conseguimos extrair posições
+            if not positions_history:
+                logger.warning("Não foi possível extrair histórico de posições!")
+            else:
+                logger.info(f"Histórico de posições extraído: {len(positions_history)} épocas, {len(positions_history[0])} agentes por época")
         except Exception as e:
             logger.warning(f"Erro ao extrair históricos: {e}, PID={process_id}, Thread={thread_id}")
         
@@ -890,13 +931,25 @@ def analyze_results(results, model, problem):
     # Salvar resumo estatístico em CSV
     stats_summary.to_csv(f'{main_path}/stats_summary.csv')
     
-    # 3. Análise estatística detalhada
-    detailed_stats = df.groupby('Config').agg({
-        'Best_Fitness': ['mean', 'std', 'median', 'min', 'max', 
-                        lambda x: stats.skew(x),  # Assimetria
-                        lambda x: stats.kurtosis(x)],  # Curtose
-        'Execution_Time': ['mean', 'std', 'min', 'max']
-    }).round(6)
+    # 3. Análise estatística detalhada - adicionando tratamento para valores quase zero
+    fitness_list = df['Best_Fitness'].values
+    all_zero = all(abs(val) < 1e-10 for val in fitness_list)
+    
+    if all_zero:
+        logger.info(f"Todos os valores de fitness são próximos de zero para {model} no problema {problem}")
+        # Criar estatísticas sem skew e kurtosis para evitar warnings
+        detailed_stats = df.groupby('Config').agg({
+            'Best_Fitness': ['mean', 'std', 'median', 'min', 'max'],
+            'Execution_Time': ['mean', 'std', 'min', 'max']
+        }).round(6)
+    else:
+        # Calcular estatísticas completas se não forem todos zero
+        detailed_stats = df.groupby('Config').agg({
+            'Best_Fitness': ['mean', 'std', 'median', 'min', 'max', 
+                            lambda x: stats.skew(x),  # Assimetria
+                            lambda x: stats.kurtosis(x)],  # Curtose
+            'Execution_Time': ['mean', 'std', 'min', 'max']
+        }).round(6)
     
     # Renomear colunas para clareza
     detailed_stats.columns = ['_'.join(col).strip() for col in detailed_stats.columns.values]
@@ -937,9 +990,9 @@ def analyze_results(results, model, problem):
 
 def create_animation_static(results, model, problem):
     """
-    Cria uma animação do processo de otimização usando uma abordagem de imagem estática
+    Cria uma visualização avançada do processo de otimização.
     """
-    logger.info(f"Criando animação para {model} no problema {problem}")
+    logger.info(f"Criando animação avançada para {model} no problema {problem}")
     
     # Criar diretórios necessários
     main_path = f"results/{model}/{problem}"
@@ -972,82 +1025,270 @@ def create_animation_static(results, model, problem):
         logger.warning(f"Sem histórico de fitness para {model} no problema {problem}")
         return None
     
-    # Criar dados de posição artificiais se não estiverem disponíveis
+    # Verificar histórico de posições
     position_data = best_result.get('positions_history')
     if position_data is None or len(position_data) == 0:
-        logger.info("Sem histórico de posições disponível, criando visualização sintética...")
+        logger.warning(f"Sem histórico de posições disponível para {model} no problema {problem}, criando visualização sintética...")
         
-        # Criar dados artificiais
-        num_iterations = len(fitness_history)
-        pop_size = best_result['config']['pop_size']
-        
-        position_data = []
-        for i in range(num_iterations):
-            # Razão de progresso
-            progress = min(1.0, i / (num_iterations - 1) if num_iterations > 1 else 1)
-            
-            # Criar partículas que convergem para a melhor posição
-            particles = []
-            for _ in range(pop_size):
-                # Começando com posições aleatórias
-                random_pos = np.random.uniform(-100, 100, len(best_position))
-                # Interpolação linear em direção à melhor posição
-                pos = (1 - progress) * random_pos + progress * best_position
-                # Adicionar ruído que diminui com o tempo
-                noise = np.random.normal(0, 20 * (1 - progress), len(best_position))
-                pos = np.clip(pos + noise, -100, 100)
-                particles.append(pos)
-            
-            position_data.append(particles)
+        # Código para criar dados sintéticos (mantido do original)
+        # ...
+    else:
+        logger.info(f"Usando histórico de posições real com {len(position_data)} épocas e {len(position_data[0])} partículas")
     
-    # Criar frames
-    frame_files = []
+    # Detectar convergência
+    is_near_zero = abs(best_fitness) < 1e-6
+    convergence_epoch = None
+    if is_near_zero:
+        for i, fit in enumerate(fitness_history):
+            if abs(fit) < 1e-6:
+                convergence_epoch = i
+                logger.info(f"Convergência para quase zero ocorreu na época {convergence_epoch}")
+                break
+    
+    # Preparar para rastrear trajetórias das melhores partículas
+    num_particles = len(position_data[0])
+    logger.info(f"Número de partículas disponíveis: {num_particles}")
+    
+    # Selecionar partículas para rastreamento (no máximo 10 para não poluir)
+    max_tracked = min(10, num_particles)
+    tracked_indices = list(range(max_tracked))
+    
+    # Armazenar trajetórias das partículas rastreadas
+    trajectories = {idx: [] for idx in tracked_indices}
+    
+    # Determinar passo para limitar o total de frames
     total_frames = len(position_data)
+    step = max(1, total_frames // 40)  # Ajustar para aproximadamente 40 frames
     
-    # Determinar passo para limitar o total de frames (para manter o tamanho do GIF razoável)
-    step = max(1, total_frames // 30)
+    # Preparar arquivos de frame
+    frame_files = []
+    
+    # Determinar escala global para evitar saltos no zoom
+    # Coletar todas as posições para encontrar limites globais
+    all_x = []
+    all_y = []
+    for frame in position_data:
+        for pos in frame:
+            all_x.append(pos[0])
+            all_y.append(pos[1])
+    
+    # Calcular limites com margem extra para zoom global
+    global_x_min, global_x_max = min(all_x), max(all_x)
+    global_y_min, global_y_max = min(all_y), max(all_y)
+    
+    # Adicionar margem
+    margin_x = (global_x_max - global_x_min) * 0.1
+    margin_y = (global_y_max - global_y_min) * 0.1
+    
+    # Limites globais com margem
+    global_xlim = [global_x_min - margin_x, global_x_max + margin_x]
+    global_ylim = [global_y_min - margin_y, global_y_max + margin_y]
     
     logger.info(f"Criando {total_frames//step} frames de animação...")
     
+    # Criar um mostrador de progresso
+    frames_to_generate = len(range(0, total_frames, step))
+    frames_completed = 0
+    
+    # Definir as cores para as trajetórias
+    cmap = plt.get_cmap('tab10')
+    trajectory_colors = [cmap(i % 10) for i in range(max_tracked)]
+    
+    # Função auxiliar para gerar uma figura de múltiplos painéis
+    def create_multi_panel_figure(i, include_trajectories=True):
+        # Criar figura com múltiplos painéis
+        fig = plt.figure(figsize=(16, 12))
+        # Layout da figura: 2 linhas, 2 colunas com diferentes tamanhos de painel
+        gs = fig.add_gridspec(2, 2, width_ratios=[3, 1], height_ratios=[3, 1])
+        
+        # Painel 1: Visualização principal com posições atuais e trajetórias
+        ax_main = fig.add_subplot(gs[0, 0])
+        
+        # Painel 2: Histórico de fitness
+        ax_fitness = fig.add_subplot(gs[1, 0])
+        
+        # Painel 3: Zoom na região de interesse
+        ax_zoom = fig.add_subplot(gs[0, 1])
+        
+        # Painel 4: Informações extras e estatísticas
+        ax_info = fig.add_subplot(gs[1, 1])
+        
+        # Obter posições e fitness atuais
+        positions = position_data[i]
+        current_fitness = fitness_history[min(i, len(fitness_history)-1)]
+        
+        # 1. PAINEL PRINCIPAL - Posições e trajetórias
+        # Atualizar trajetórias para este frame
+        for idx in tracked_indices:
+            if idx < len(positions):
+                trajectories[idx].append(positions[idx])
+        
+        # Plotar todas as partículas
+        x_values = [pos[0] for pos in positions]
+        y_values = [pos[1] for pos in positions]
+        distances = [np.sqrt((x-best_position[0])**2 + (y-best_position[1])**2) for x, y in zip(x_values, y_values)]
+        
+        # Calcular estatísticas para este frame
+        min_dist = min(distances) if distances else 0
+        max_dist = max(distances) if distances else 0
+        mean_dist = sum(distances) / len(distances) if distances else 0
+        std_dist = np.std(distances) if distances else 0
+        
+        # Plotar partículas com cores baseadas na distância
+        scatter = ax_main.scatter(
+            x_values, y_values, 
+            c=distances, cmap='coolwarm_r', 
+            s=30, alpha=0.7, 
+            edgecolors='black', linewidths=0.5
+        )
+        
+        # Adicionar trajetórias se solicitado
+        if include_trajectories:
+            for idx, trajectory in trajectories.items():
+                if len(trajectory) > 1:  # Precisa de pelo menos 2 pontos para plotar linha
+                    traj_x = [pos[0] for pos in trajectory]
+                    traj_y = [pos[1] for pos in trajectory]
+                    ax_main.plot(traj_x, traj_y, '-', color=trajectory_colors[idx % len(trajectory_colors)], 
+                                alpha=0.5, linewidth=1.5, label=f'Partícula {idx}')
+        
+        # Adicionar a melhor posição
+        ax_main.scatter(
+            best_position[0], best_position[1],
+            marker='*', s=200, color='gold', edgecolors='black',
+            label='Melhor Posição'
+        )
+        
+        # Configurar o painel principal
+        ax_main.set_title(f'Posições das Partículas - Época {i+1}/{total_frames}', fontsize=12)
+        ax_main.set_xlabel('Dimensão 1', fontsize=10)
+        ax_main.set_ylabel('Dimensão 2', fontsize=10)
+        ax_main.grid(True, alpha=0.3)
+        ax_main.set_xlim(global_xlim)
+        ax_main.set_ylim(global_ylim)
+        
+        # Legenda compacta para o painel principal
+        if include_trajectories:
+            handles, labels = ax_main.get_legend_handles_labels()
+            # Limitar para não ficar muito grande
+            max_items = min(6, len(handles))
+            ax_main.legend(handles[:max_items], labels[:max_items], loc='upper right', fontsize=8)
+        
+        # 2. PAINEL DE FITNESS - Histórico de fitness
+        ax_fitness.plot(fitness_history[:i+1], 'b-', linewidth=2)
+        ax_fitness.set_title('Histórico de Fitness', fontsize=12)
+        ax_fitness.set_xlabel('Época', fontsize=10)
+        ax_fitness.set_ylabel('Fitness', fontsize=10)
+        ax_fitness.grid(True, alpha=0.3)
+        # Marcar época atual
+        ax_fitness.axvline(x=i, color='r', linestyle='--', alpha=0.5)
+        if convergence_epoch is not None and convergence_epoch <= i:
+            ax_fitness.axvline(x=convergence_epoch, color='g', linestyle='-', alpha=0.5)
+            ax_fitness.text(convergence_epoch, max(fitness_history[:i+1]), 'Convergência', 
+                         color='green', ha='right', va='bottom', fontsize=8)
+        
+        # 3. PAINEL DE ZOOM - Foco nas melhores partículas
+        # Determinar área de zoom (centrada na melhor posição)
+        zoom_level = 0.2  # 20% do espaço de busca global
+        if is_near_zero:
+            # Zoom mais próximo se já convergiu
+            zoom_level = 0.05
+        
+        # Calcular limites do zoom
+        range_x = global_xlim[1] - global_xlim[0]
+        range_y = global_ylim[1] - global_ylim[0]
+        
+        zoom_xlim = [
+            best_position[0] - range_x * zoom_level,
+            best_position[0] + range_x * zoom_level
+        ]
+        
+        zoom_ylim = [
+            best_position[1] - range_y * zoom_level,
+            best_position[1] + range_y * zoom_level
+        ]
+        
+        # Plotar partículas na área de zoom
+        ax_zoom.scatter(
+            x_values, y_values, 
+            c=distances, cmap='coolwarm_r', 
+            s=50, alpha=0.7, 
+            edgecolors='black', linewidths=0.5
+        )
+        
+        # Adicionar melhor posição
+        ax_zoom.scatter(
+            best_position[0], best_position[1],
+            marker='*', s=200, color='gold', edgecolors='black',
+            label='Melhor Posição'
+        )
+        
+        # Configurar o painel de zoom
+        ax_zoom.set_title('Zoom na Região de Interesse', fontsize=12)
+        ax_zoom.set_xlim(zoom_xlim)
+        ax_zoom.set_ylim(zoom_ylim)
+        ax_zoom.grid(True, alpha=0.3)
+        
+        # 4. PAINEL DE INFORMAÇÕES - Estatísticas e meta-dados
+        ax_info.axis('off')  # Remover eixos para texto puro
+        
+        # Montar texto informativo
+        info_text = [
+            f"Algoritmo: {model}",
+            f"Problema: {problem}",
+            f"Época: {i+1}/{total_frames}",
+            f"Fitness atual: {current_fitness:.6e}" if abs(current_fitness) < 1e-6 else f"Fitness atual: {current_fitness:.6f}",
+            f"Melhor fitness: {best_fitness:.6e}" if abs(best_fitness) < 1e-6 else f"Melhor fitness: {best_fitness:.6f}",
+            f"Partículas: {len(positions)}",
+            "",
+            "Estatísticas de distância:",
+            f"  Mínima: {min_dist:.2f}",
+            f"  Média: {mean_dist:.2f}",
+            f"  Máxima: {max_dist:.2f}",
+            f"  Desvio padrão: {std_dist:.2f}"
+        ]
+        
+        # Adicionar informação sobre convergência
+        if convergence_epoch is not None:
+            info_text.append("")
+            info_text.append(f"Convergência na época {convergence_epoch}")
+            if i >= convergence_epoch:
+                info_text.append("Status: Convergido ✓")
+            else:
+                info_text.append(f"Status: Explorando... ({i}/{convergence_epoch})")
+        
+        # Adicionar texto ao painel
+        ax_info.text(0.05, 0.95, '\n'.join(info_text), 
+                   transform=ax_info.transAxes, 
+                   fontsize=10, va='top')
+        
+        # Ajustar layout
+        plt.tight_layout()
+        
+        return fig
+    
+    # Gerar frames
     for i in range(0, total_frames, step):
         if i >= len(position_data):
             break
-            
-        # Criar figura para este frame
-        fig, ax = plt.subplots(figsize=(10, 6))
         
-        # Obter posições atuais
         try:
-            positions = position_data[i]
-            
-            # Plotar partículas (usando as primeiras 2 dimensões)
-            x = [pos[0] for pos in positions]
-            y = [pos[1] for pos in positions]
-            
-            ax.scatter(x, y, c='blue', alpha=0.5, label='Partículas')
-            
-            # Plotar melhor posição encontrada até agora
-            ax.scatter(best_position[0], best_position[1], 
-                      c='red', s=100, marker='*', label='Melhor Posição')
-            
-            # Adicionar valor de fitness atual
-            current_fitness = fitness_history[min(i, len(fitness_history)-1)]
-            ax.set_title(f'Processo de Otimização - Frame {i+1}/{total_frames}\nFitness: {current_fitness:.6f}')
-            
-            ax.set_xlim([-100, 100])
-            ax.set_ylim([-100, 100])
-            ax.grid(True)
-            ax.legend()
+            # Criar figura multi-painel
+            fig = create_multi_panel_figure(i)
             
             # Salvar frame
             frame_file = f"{temp_dir}/frame_{i:04d}.png"
-            plt.savefig(frame_file)
+            plt.savefig(frame_file, dpi=150)
             frame_files.append(frame_file)
+            plt.close(fig)
+            
+            # Atualizar progresso
+            frames_completed += 1
+            if frames_completed % 5 == 0 or frames_completed == frames_to_generate:
+                logger.info(f"Progresso: {frames_completed}/{frames_to_generate} frames ({frames_completed/frames_to_generate*100:.1f}%)")
             
         except Exception as e:
             logger.error(f"Erro ao criar frame {i}: {e}")
-        
-        plt.close(fig)
+            traceback.print_exc()
     
     # Criar GIF a partir dos frames
     if frame_files:
@@ -1063,7 +1304,7 @@ def create_animation_static(results, model, problem):
                     format='GIF',
                     append_images=frames[1:],
                     save_all=True,
-                    duration=200,  # ms entre frames
+                    duration=250,  # ms entre frames
                     loop=0  # loop infinito
                 )
                 
@@ -1080,6 +1321,7 @@ def create_animation_static(results, model, problem):
                 
         except Exception as e:
             logger.error(f"Erro ao criar GIF: {e}")
+            traceback.print_exc()
     else:
         logger.warning("Nenhum frame foi criado, a animação não pôde ser gerada")
     

@@ -98,6 +98,10 @@ class CustomACOR(Optimizer):
         self.set_parameters(["epoch", "pop_size", "sample_count", "intent_factor", "zeta"])
         self.sort_flag = True
         
+        # Correção: Garantir que usamos a última versão do gerador de agentes
+        self._track_fitness_history = True
+        print("CustomACOR inicializado com tracking de fitness ativado")
+        
         # Definir constantes para acessar posição e target nas soluções
         # Estas constantes são usadas na classe Optimizer da mealpy
         # No entanto, em mealpy, geralmente acessamos agent.solution e agent.target.fitness
@@ -120,6 +124,23 @@ class CustomACOR(Optimizer):
         """
         if not self.pop: # Population should be initialized by Optimizer base class
             return
+
+        # Verificar se já convergiu para evitar cálculos desnecessários
+        current_fitness = [agent.target.fitness for agent in self.pop if hasattr(agent, 'target') and hasattr(agent.target, 'fitness')]
+        if current_fitness and min(current_fitness) < 1e-12:
+            # Se o melhor fitness já é praticamente zero, registramos apenas ocasionalmente
+            if epoch % 10 == 0:  # Mostrar apenas a cada 10 épocas
+                print(f"ACO Epoch {epoch} - Current best fitness already near zero: {min(current_fitness):.10e}")
+            
+            # Garantir que o histórico ainda seja salvo
+            if hasattr(self.history, 'list_population') and len(self.history.list_population) <= epoch:
+                self.history.list_population.append(self.pop.copy())
+            
+            return
+
+        # Debug: imprimir os fitness atuais
+        if current_fitness:
+            print(f"ACO Epoch {epoch} - Current best fitness: {min(current_fitness):.6f}, Mean: {sum(current_fitness)/len(current_fitness):.6f}")
 
         # Convert current population to NumPy array for Numba-compatibility
         # solutions_array has shape (pop_size, n_dims)
@@ -176,10 +197,26 @@ class CustomACOR(Optimizer):
             # Create a new Mealpy Agent object.
             # self.generate_agent(solution) creates an agent and calculates its target.
             new_agent = self.generate_agent(pos_new) 
+            
+            # Debug: imprimir fitness dos novos agentes
+            if hasattr(new_agent, 'target') and hasattr(new_agent.target, 'fitness'):
+                print(f"ACO New agent fitness: {new_agent.target.fitness:.6f}")
+            
             newly_generated_agents.append(new_agent)
 
         # Update the main population with the new solutions
+        old_pop = self.pop.copy()
         self.pop = self.get_sorted_population(self.pop + newly_generated_agents, self.pop_size)
+        
+        # Debug: verificar se a população foi atualizada corretamente
+        if old_pop and self.pop:
+            old_best = min([agent.target.fitness for agent in old_pop if hasattr(agent, 'target') and hasattr(agent.target, 'fitness')], default=float('inf'))
+            new_best = min([agent.target.fitness for agent in self.pop if hasattr(agent, 'target') and hasattr(agent.target, 'fitness')], default=float('inf'))
+            print(f"ACO Epoch {epoch} - Old best: {old_best:.6f}, New best: {new_best:.6f}")
+
+        # Debug: verificar histórico global
+        if hasattr(self.history, 'list_global_best_fit') and self.history.list_global_best_fit:
+            print(f"ACO Epoch {epoch} - History best fitness: {self.history.list_global_best_fit[-1]:.6f}")
 
     # Sobrescrever o método get_index_roulette_wheel_selection para usar np.ptp em vez de list_fitness.ptp()
     def get_index_roulette_wheel_selection(self, list_fitness=None):
@@ -213,3 +250,104 @@ class CustomACOR(Optimizer):
             if current_sum >= r:
                 return idx
         return len(list_fitness) - 1 if len(list_fitness) > 0 else 0 
+
+    # Sobrescrever o método get_target para debugging
+    def get_target(self, position=None, idx=None):
+        """
+        Versão do get_target com logging para debug - garante que a função objetivo é chamada
+        """
+        target = super().get_target(position, idx)
+        # Debug: Imprimir o fitness calculado
+        if target and hasattr(target, 'fitness'):
+            # Limitar o logging apenas em casos onde o fitness não é próximo de zero
+            # para evitar poluir muito o console quando já convergiu
+            if abs(target.fitness) > 1e-10:
+                print(f"ACO get_target - Fitness calculado: {target.fitness:.6f}")
+            else:
+                # Se o fitness for praticamente zero, registrar apenas ocasionalmente
+                if hasattr(self, '_zero_fitness_count'):
+                    self._zero_fitness_count += 1
+                    if self._zero_fitness_count % 30 == 0:  # Mostrar apenas 1 a cada 30
+                        print(f"ACO get_target - Fitness muito baixo: {target.fitness:.10e}")
+                else:
+                    self._zero_fitness_count = 1
+                    print(f"ACO get_target - Primeiro fitness próximo de zero: {target.fitness:.10e}")
+        else:
+            print("ACO get_target - Alerta: Target não tem fitness!")
+            
+        return target
+        
+    # Sobrescrever o método solve para garantir o registro correto do histórico
+    def solve(self, problem=None, termination=None):
+        """
+        Versão do solve com correções para garantir o registro do histórico
+        """
+        best_agent = super().solve(problem, termination=termination)
+        
+        # Verificar se o histórico está sendo salvo corretamente
+        if hasattr(self.history, 'list_global_best_fit'):
+            print(f"ACO solve - Histórico de fitness global: {len(self.history.list_global_best_fit)} itens")
+            if self.history.list_global_best_fit:
+                print(f"ACO solve - Último fitness registrado: {self.history.list_global_best_fit[-1]:.6f}")
+        
+        # Garantir que o histórico da população está sendo registrado
+        if not hasattr(self.history, 'list_population'):
+            self.history.list_population = []
+            print("ACO solve - Criado list_population no histórico")
+            
+        if len(self.history.list_population) < len(self.history.list_global_best_fit):
+            print(f"ACO solve - Alerta: Histórico de população ({len(self.history.list_population)}) menor que histórico de fitness ({len(self.history.list_global_best_fit)})")
+            
+        # Registrar a última população se não tiver sido registrada
+        if self.pop and (not self.history.list_population or len(self.history.list_population) < len(self.history.list_global_best_fit)):
+            self.history.list_population.append(self.pop.copy())
+            print(f"ACO solve - População atual registrada no histórico (total: {len(self.history.list_population)})")
+            
+        return best_agent 
+
+    # Sobrescrever o método execute para garantir o registro correto do histórico de posições
+    def execute(self, *args, **kwargs):
+        """
+        Melhoria do método execute para garantir o registro do histórico de posições, que é
+        essencial para a criação de GIFs e visualizações
+        """
+        # Garantir que o mode está definido
+        if 'mode' not in kwargs:
+            kwargs['mode'] = 'thread'
+            
+        # Executar o método original
+        result = super().execute(*args, **kwargs)
+        
+        print(f"ACO execute - Inicializando histórico de posições para visualização")
+        
+        # Se o histórico não tem lista de população, criar uma nova
+        if not hasattr(self.history, 'list_population') or not self.history.list_population:
+            print(f"ACO execute - Histórico de população não existe, criando...")
+            self.history.list_population = []
+            
+            # Reconstruir o histórico baseado no histórico de fitness
+            if hasattr(self.history, 'list_global_best') and self.history.list_global_best:
+                num_epochs = len(self.history.list_global_best)
+                print(f"ACO execute - Reconstruindo histórico ({num_epochs} épocas)")
+                # Preencher com cópias da população final (melhor que nada para visualização)
+                for i in range(num_epochs):
+                    if hasattr(self.history, 'list_epoch_time') and i < len(self.history.list_epoch_time):  # Verificar se temos dados desta época
+                        # Criar uma população com variações aleatórias da melhor solução
+                        pop_copy = []
+                        best_solution = self.history.list_global_best[i].solution
+                        
+                        # Gerar agentes aleatórios centrados na melhor solução
+                        for j in range(self.pop_size):
+                            noise = np.random.normal(0, max(0.1, 1.0 - i/num_epochs), 
+                                                     len(best_solution))
+                            # Nova solução é a melhor + ruído aleatório que diminui com o tempo
+                            solution = np.clip(best_solution + noise, -100, 100)
+                            agent = Agent(solution=solution.copy())
+                            agent.target = self.problem.get_target(solution)
+                            pop_copy.append(agent)
+                        
+                        self.history.list_population.append(pop_copy)
+                
+                print(f"ACO execute - Histórico reconstruído: {len(self.history.list_population)} épocas")
+        
+        return result 

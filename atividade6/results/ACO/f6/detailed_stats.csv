@@ -1,4 +1,4 @@
-Config,Best_Fitness_mean,Best_Fitness_std,Best_Fitness_median,Best_Fitness_min,Best_Fitness_max,Best_Fitness_<lambda_0>,Best_Fitness_<lambda_1>,Execution_Time_mean,Execution_Time_std,Execution_Time_min,Execution_Time_max
-Config 1,0.0,0.0,0.0,0.0,0.0,,,18.393816,1.347698,15.325499,19.582907
-Config 2,0.0,0.0,0.0,0.0,0.0,,,16.362101,2.677635,13.074735,21.231469
-Config 3,0.0,0.0,0.0,0.0,0.0,0.872872,-1.238095,16.494391,2.977479,11.353307,20.158626
+Config,Best_Fitness_mean,Best_Fitness_std,Best_Fitness_median,Best_Fitness_min,Best_Fitness_max,Execution_Time_mean,Execution_Time_std,Execution_Time_min,Execution_Time_max
+Config 1,0.0,0.0,0.0,0.0,0.0,3.513099,2.463182,2.064036,10.215256
+Config 2,0.0,0.0,0.0,0.0,0.0,6.024487,1.12447,3.897595,7.91224
+Config 3,0.0,0.0,0.0,0.0,0.0,9.31604,1.65065,7.419681,12.664767
