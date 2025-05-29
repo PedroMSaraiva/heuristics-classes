@@ -494,7 +494,7 @@ def train_model_optimized(model="PSO", problem="f6", config_idx=0, run_id=0):
         try:
             # Extrair histórico de fitness global - Adicionando verificações robustas
             if hasattr(algorithm.history, 'list_global_best_fit'):
-                fitness_history = algorithm.history.list_global_best_fit
+            fitness_history = algorithm.history.list_global_best_fit
                 # Verificar se o histórico de fitness tem valores reais
                 if fitness_history and all(val == 0.0 for val in fitness_history):
                     logger.warning(f"ATENÇÃO: Todos os valores de fitness no histórico são 0.0, indicando possível problema!")
@@ -944,12 +944,12 @@ def analyze_results(results, model, problem):
         }).round(6)
     else:
         # Calcular estatísticas completas se não forem todos zero
-        detailed_stats = df.groupby('Config').agg({
-            'Best_Fitness': ['mean', 'std', 'median', 'min', 'max', 
-                            lambda x: stats.skew(x),  # Assimetria
-                            lambda x: stats.kurtosis(x)],  # Curtose
-            'Execution_Time': ['mean', 'std', 'min', 'max']
-        }).round(6)
+    detailed_stats = df.groupby('Config').agg({
+        'Best_Fitness': ['mean', 'std', 'median', 'min', 'max', 
+                        lambda x: stats.skew(x),  # Assimetria
+                        lambda x: stats.kurtosis(x)],  # Curtose
+        'Execution_Time': ['mean', 'std', 'min', 'max']
+    }).round(6)
     
     # Renomear colunas para clareza
     detailed_stats.columns = ['_'.join(col).strip() for col in detailed_stats.columns.values]
@@ -1115,7 +1115,7 @@ def create_animation_static(results, model, problem):
         
         # Obter posições e fitness atuais
         positions = position_data[i]
-        current_fitness = fitness_history[min(i, len(fitness_history)-1)]
+            current_fitness = fitness_history[min(i, len(fitness_history)-1)]
         
         # 1. PAINEL PRINCIPAL - Posições e trajetórias
         # Atualizar trajetórias para este frame

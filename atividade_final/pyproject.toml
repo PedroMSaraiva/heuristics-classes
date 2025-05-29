@@ -5,6 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "loguru>=0.7.3",
     "pandas>=2.2.3",
+    "pygad>=3.4.0",
+    "scikit-learn>=1.6.1",
     "scipy>=1.15.2",
+    "seaborn>=0.13.2",
 ]
