@@ -6,6 +6,9 @@ from src.logging_utils import get_logger
 
 logger = get_logger('compare_results')
 
+# ATENÇÃO: Os novos arquivos de dados estão em 'data/csv_new'.
+# ATENÇÃO: Os resultados devem ser comparados com os arquivos gerados a partir dos novos CSVs em 'data/csv_new'.
+
 def load_results(csv_paths):
     """Carrega múltiplos arquivos CSV de resultados.
 

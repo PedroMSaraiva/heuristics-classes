@@ -5,7 +5,7 @@ set -e
 
 # 1. Visualização exploratória do dataset
 echo "[1/4] Gerando visualizações exploratórias..."
-python visualize_dataset.py
+#python visualize_dataset.py
 
 # 2. Baseline de Regressão Linear Múltipla
 echo "[2/4] Executando baseline MLR..."
