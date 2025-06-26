@@ -11,14 +11,11 @@ import numpy as np
 import pygad
 from src.logging_utils import get_logger
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import r2_score
-import scipy.stats as stats
 import optuna
 import json
 from typing import Dict, Any, Tuple
 import warnings
-warnings.filterwarnings('ignore', category=optuna.exceptions.ExperimentalWarning)
+warnings.filterwarnings('ignore')
 
 logger = get_logger('genetic_mlr')
 
@@ -155,165 +152,33 @@ def prepare_datasets(df: pd.DataFrame, idrc_df: pd.DataFrame):
     
     return X_train_scaled, y_train, X_test_scaled, y_test, X_val_scaled, y_val, feature_columns, scaler
 
-def custom_mutation_func(offspring, ga_instance):
-    """Função de mutação customizada inteligente que preserva boas soluções.
+def adaptive_mutation_func(offspring, ga_instance):
+    """Mutação adaptativa simplificada com controle de features."""
+    MAX_FEATURES = getattr(adaptive_mutation_func, 'max_features', 70)
     
-    Args:
-        offspring: População de descendentes
-        ga_instance: Instância do GA
-    
-    Returns:
-        offspring: População mutada
-    """
-    MAX_FEATURES = getattr(custom_mutation_func, 'max_features', 90)
-    
-    for chromosome_idx in range(offspring.shape[0]):
-        original_solution = offspring[chromosome_idx].copy()
-        original_features = np.sum(original_solution)
+    for i in range(offspring.shape[0]):
+        current_features = np.sum(offspring[i])
         
-        # 🧬 MUTAÇÃO INTELIGENTE ADAPTATIVA:
-        # Taxa de mutação baseada no número de features E contexto evolutivo
-        boost_mutation = getattr(custom_mutation_func, 'boost_mutation', False)
+        # Taxa adaptativa baseada no número de features
+        mutation_rate = 0.02 if current_features <= 30 else (0.05 if current_features <= 50 else 0.15)
         
-        if original_features <= 30:
-            # Soluções com poucas features: mutação suave (preservar qualidade)
-            mutation_probability = 0.04 if boost_mutation else 0.02
-            max_mutations = 5 if boost_mutation else 3
-        elif original_features <= 50:
-            # Soluções medianas: mutação moderada
-            mutation_probability = 0.10 if boost_mutation else 0.05
-            max_mutations = 8 if boost_mutation else 5
-        else:
-            # Soluções com muitas features: mutação agressiva (simplificar)
-            mutation_probability = 0.25 if boost_mutation else 0.15
-            max_mutations = 15 if boost_mutation else 10
+        # Aplica mutação bit-flip
+        mutations = np.random.random(offspring.shape[1]) < mutation_rate
+        offspring[i] = np.where(mutations, 1 - offspring[i], offspring[i])
         
-        mutations_made = 0
-        
-        # Aplica mutação com limite
-        for gene_idx in range(offspring.shape[1]):
-            if mutations_made >= max_mutations:
-                break
-                
-            if np.random.random() < mutation_probability:
-                # Flip do bit
-                offspring[chromosome_idx, gene_idx] = 1 - offspring[chromosome_idx, gene_idx]
-                mutations_made += 1
-        
-        # ✅ Controle de restrições INTELIGENTE
-        selected_count = np.sum(offspring[chromosome_idx])
-        
-        if selected_count > MAX_FEATURES:
-            # Remove features com MENOR correlação (manter as melhores)
-            selected_indices = np.where(offspring[chromosome_idx] == 1)[0]
-            excess_count = selected_count - MAX_FEATURES
-            
-            # Calcula correlações das features selecionadas
-            if hasattr(fitness_func, 'X_train') and hasattr(fitness_func, 'y_train'):
-                correlations = np.abs(np.corrcoef(fitness_func.X_train.T, fitness_func.y_train)[:-1, -1])
-                selected_correlations = correlations[selected_indices]
-                # Remove features com MENOR correlação
-                worst_indices = selected_indices[np.argsort(selected_correlations)[:excess_count]]
-            else:
-                # Fallback: remove aleatoriamente
-                worst_indices = np.random.choice(selected_indices, size=excess_count, replace=False)
-            
-            offspring[chromosome_idx, worst_indices] = 0
-            
-        elif selected_count == 0:
-            # Adiciona feature com MAIOR correlação
-            if hasattr(fitness_func, 'X_train') and hasattr(fitness_func, 'y_train'):
-                correlations = np.abs(np.corrcoef(fitness_func.X_train.T, fitness_func.y_train)[:-1, -1])
-                best_feature = np.argmax(correlations)
-                offspring[chromosome_idx, best_feature] = 1
-            else:
-                # Fallback: adiciona aleatoriamente
-                random_index = np.random.randint(0, offspring.shape[1])
-                offspring[chromosome_idx, random_index] = 1
-        
-        # 🛡️ PROTEÇÃO CONTRA MUTAÇÃO DESTRUTIVA:
-        # Se a mutação criou uma solução muito ruim, reverte parcialmente
-        new_features = np.sum(offspring[chromosome_idx])
-        if new_features > original_features + 20:  # Mudança muito drástica
-            # Reverte para uma versão mais conservadora
-            offspring[chromosome_idx] = original_solution.copy()
-            # Aplica apenas 1-2 mutações pequenas
-            for _ in range(np.random.randint(1, 3)):
-                random_gene = np.random.randint(0, offspring.shape[1])
-                offspring[chromosome_idx, random_gene] = 1 - offspring[chromosome_idx, random_gene]
-            
-            # Reaplica controle de features
-            if np.sum(offspring[chromosome_idx]) > MAX_FEATURES:
-                selected_indices = np.where(offspring[chromosome_idx] == 1)[0]
-                excess = np.sum(offspring[chromosome_idx]) - MAX_FEATURES
-                to_remove = np.random.choice(selected_indices, size=excess, replace=False)
-                offspring[chromosome_idx, to_remove] = 0
+        # Controle de restrições
+        current_features = np.sum(offspring[i])
+        if current_features > MAX_FEATURES:
+            excess = current_features - MAX_FEATURES
+            selected_indices = np.where(offspring[i] == 1)[0]
+            to_remove = np.random.choice(selected_indices, size=excess, replace=False)
+            offspring[i, to_remove] = 0
+        elif current_features == 0:
+            offspring[i, np.random.randint(0, offspring.shape[1])] = 1
     
     return offspring
 
-def custom_crossover_func(parents, offspring_size, ga_instance):
-    """Função de crossover customizada que respeita a restrição de máximo features configurável.
-    Usa seleção por torneio para escolher os pais.
-    
-    Args:
-        parents: Pais selecionados pelo torneio
-        offspring_size: Tamanho da descendência desejada
-        ga_instance: Instância do GA
-    
-    Returns:
-        offspring: Descendência gerada
-    """
-    MAX_FEATURES = getattr(custom_crossover_func, 'max_features', 90)
-    offspring = np.empty(offspring_size, dtype=int)
-    
-    def tournament_selection(parents, tournament_size=4):
-        """Seleção por torneio para escolher um pai."""
-        # Seleciona indivíduos aleatórios para o torneio
-        # Garante que não selecione mais participantes que o número de pais disponíveis
-        tournament_size = min(tournament_size, parents.shape[0])
-        tournament_indices = np.random.choice(parents.shape[0], size=tournament_size, replace=False)
-        tournament_parents = parents[tournament_indices]
-        
-        # Calcula fitness para cada participante do torneio
-        best_fitness = -np.inf
-        best_parent = None
-        
-        for parent in tournament_parents:
-            fitness = fitness_func(ga_instance, parent, 0)
-            if fitness > best_fitness:
-                best_fitness = fitness
-                best_parent = parent
-        
-        return best_parent
-    
-    for k in range(offspring_size[0]):
-        # ✅ Seleção por torneio para escolher dois pais
-        parent1 = tournament_selection(parents)
-        parent2 = tournament_selection(parents)
-        
-        # Crossover de dois pontos
-        crossover_point1 = np.random.randint(1, offspring_size[1])
-        crossover_point2 = np.random.randint(crossover_point1, offspring_size[1])
-        
-        child = parent1.copy()
-        child[crossover_point1:crossover_point2] = parent2[crossover_point1:crossover_point2]
-        
-        # ✅ Garante que não exceda 90 features
-        selected_count = np.sum(child)
-        if selected_count > MAX_FEATURES:
-            # Remove features aleatoriamente até chegar a 90
-            selected_indices = np.where(child == 1)[0]
-            excess_count = selected_count - MAX_FEATURES
-            indices_to_remove = np.random.choice(selected_indices, size=excess_count, replace=False)
-            child[indices_to_remove] = 0
-        elif selected_count == 0:
-            # Garante que pelo menos uma feature seja selecionada
-            random_index = np.random.randint(0, offspring_size[1])
-            child[random_index] = 1
-        
-        offspring[k] = child
-    
-    return offspring
+# Removemos o crossover customizado para usar o nativo do PyGAD com controle de features
 
 def fitness_func(ga_instance, solution, solution_idx):
     """Função de fitness otimizada usando cross-validation apenas no conjunto de treino.
@@ -322,7 +187,7 @@ def fitness_func(ga_instance, solution, solution_idx):
     - Cache de resultados para soluções idênticas
     - Cross-validation reduzido durante otimização
     - Penalização eficiente para restrições
-    
+
     Args:
         ga_instance: Instância do GA (PyGAD).
         solution: Vetor binário de seleção de features.
@@ -422,7 +287,7 @@ def run_genetic_feature_selection(X_train, y_train, X_val, y_val, X_test, y_test
     num_features = X_train.shape[1]
     fitness_func.X_train = X_train
     fitness_func.y_train = y_train
-
+    
     correlations = np.abs(np.corrcoef(X_train.T, y_train)[:-1, -1])
     initial_population = []
     
@@ -482,9 +347,8 @@ def run_genetic_feature_selection(X_train, y_train, X_val, y_val, X_test, y_test
     logger.info(f"  - Elitismo: {ga_params.get('keep_parents', 8)}")
     logger.info(f"  - Máximo features: {MAX_FEATURES}")
     
-    # ✅ Configura parâmetros para funções customizadas
-    custom_mutation_func.max_features = MAX_FEATURES
-    custom_crossover_func.max_features = MAX_FEATURES
+    # ✅ Configura parâmetros para funções
+    adaptive_mutation_func.max_features = MAX_FEATURES
     fitness_func.max_features = MAX_FEATURES
     fitness_func.cv_folds = ga_params.get("cv_folds", 4)
     fitness_func.feature_penalty = ga_params.get("feature_penalty", 0.2)
@@ -503,81 +367,58 @@ def run_genetic_feature_selection(X_train, y_train, X_val, y_val, X_test, y_test
         stop_criteria = ["reach_30", "saturate_50"]  # Permite mais evolução
         parallel_threads = 4
     
-    # 🚀 CONFIGURAÇÃO AVANÇADA PARA EVITAR ESTAGNAÇÃO
+    # 🔄 Callback simplificado para restart automático
     def on_generation(ga_instance):
-        """Callback executado a cada geração para monitorar diversidade e aplicar restart se necessário."""
         generation = ga_instance.generations_completed
-        current_fitness = ga_instance.best_solutions_fitness[-1]
-        
-        # 🔄 RESTART SE ESTAGNAR POR MUITO TEMPO
-        if generation >= 10:  # Só depois de 10 gerações
-            last_5_fitness = ga_instance.best_solutions_fitness[-5:]
-            if len(set(last_5_fitness)) == 1:  # Estagnação completa
-                print(f"  [Gen {generation}] 🔄 RESTART: Estagnação detectada, diversificando população...")
-                
-                # Mantém os 20% melhores, regenera o resto
-                population = ga_instance.population
-                fitness_values = [fitness_func(ga_instance, sol, i) for i, sol in enumerate(population)]
-                
-                # Ordena por fitness
-                sorted_indices = np.argsort(fitness_values)[::-1]  # Decrescente
-                keep_count = max(2, len(population) // 5)  # Mantém 20%
-                
-                # Mantém os melhores
-                new_population = population[sorted_indices[:keep_count]].copy()
-                
-                # Regenera o resto com mais diversidade
-                correlations = np.abs(np.corrcoef(fitness_func.X_train.T, fitness_func.y_train)[:-1, -1])
-                probs = correlations / correlations.sum()
-                
-                for i in range(keep_count, len(population)):
-                    # Gera nova solução com diversidade forçada
-                    solution = np.zeros(num_features, dtype=int)
-                    num_features_to_select = np.random.randint(5, ga_params.get("max_features", 60) // 2)
-                    
-                    # Usa distribuição mais uniforme para diversidade
-                    if np.random.random() < 0.5:
-                        # 50% das vezes: seleção baseada em correlação
-                        selected_indices = np.random.choice(num_features, size=num_features_to_select, 
-                                                          p=probs, replace=False)
-                    else:
-                        # 50% das vezes: seleção completamente aleatória
-                        selected_indices = np.random.choice(num_features, size=num_features_to_select, 
-                                                          replace=False)
-                    
-                    solution[selected_indices] = 1
-                    new_population = np.vstack([new_population, solution])
-                
-                ga_instance.population = new_population
-        
-        # 🎯 Aumenta pressão de mutação se progresso lento
-        if generation >= 5:
-            recent_improvement = ga_instance.best_solutions_fitness[-1] - ga_instance.best_solutions_fitness[-5]
-            if recent_improvement < 0.1:  # Progresso muito lento
-                # Aumenta taxa de mutação temporariamente
-                custom_mutation_func.boost_mutation = True
+        if generation >= 10 and generation % 15 == 0:
+            recent_fitness = ga_instance.best_solutions_fitness[-5:]
+            if len(set(recent_fitness)) == 1:  # Estagnação
+                print(f"  [Gen {generation}] 🔄 RESTART: diversificando população...")
+                # Regenera 80% da população mantendo 20% da elite
+                pop_size = len(ga_instance.population)
+                keep_count = pop_size // 5
+                new_pop = create_diverse_population(num_features, pop_size - keep_count, correlations, MAX_FEATURES)
+                ga_instance.population = np.vstack([ga_instance.population[:keep_count], new_pop])
+    
+    def create_diverse_population(num_features, pop_size, correlations, max_features):
+        """Cria população diversificada baseada em correlações."""
+        population = []
+        probs = correlations / correlations.sum()
+        for i in range(pop_size):
+            solution = np.zeros(num_features, dtype=int)
+            n_features = np.random.randint(5, max_features//2)
+            if np.random.random() < 0.5:
+                selected_indices = np.random.choice(num_features, size=n_features, p=probs, replace=False)
             else:
-                custom_mutation_func.boost_mutation = False
+                selected_indices = np.random.choice(num_features, size=n_features, replace=False)
+            solution[selected_indices] = 1
+            population.append(solution)
+        return np.array(population)
 
+    # ✅ Configuração PyGAD simplificada
     ga_instance = pygad.GA(
-        num_generations=ga_params.get("num_generations", 150),
+        num_generations=ga_params.get("num_generations", 80),
         num_parents_mating=num_parents_mating,
         fitness_func=fitness_func,
-        sol_per_pop=ga_params.get("sol_per_pop", 60),
+        sol_per_pop=ga_params.get("sol_per_pop", 40),
         num_genes=num_features,
-        gene_type=int,
-        init_range_low=0,
-        init_range_high=2,
         initial_population=initial_population,
-        mutation_type=custom_mutation_func,  # ✅ Mutação customizada
-        crossover_type=custom_crossover_func,  # ✅ Crossover customizado
+        gene_type=int,
         gene_space=[0, 1],
+        
+        # Operadores nativos do PyGAD
         parent_selection_type="tournament",
         K_tournament=ga_params.get("K_tournament", 4),
-        keep_parents=ga_params.get("keep_parents", 8),
-        parallel_processing=["thread", parallel_threads],
-        stop_criteria=stop_criteria,
-        on_generation=on_generation  # 🚀 Callback para controle avançado
+        crossover_type="two_points",
+        crossover_probability=0.8,
+        mutation_type=adaptive_mutation_func,
+        
+        # Elitismo nativo
+        keep_elitism=ga_params.get("keep_parents", 6),
+        
+        # Callback e critérios de parada
+        on_generation=on_generation,
+        stop_criteria=stop_criteria
     )
     
     logger.info("Iniciando algoritmo genético para seleção de features...")
@@ -678,199 +519,63 @@ def plot_feature_importance(model, selected_features, feature_names, output_dir)
     plt.close()
     logger.info(f"Gráfico de importância das features salvo em {plot_path}")
 
-def plot_genetic_evolution(ga_instance, output_dir):
-    """Plota a evolução do algoritmo genético.
-
-    Args:
-        ga_instance: Instância do GA (PyGAD).
-        output_dir: Pasta de saída.
-    """
-    plt.figure(figsize=(12, 8))
+def create_plots(ga_instance, model, selected_features, feature_cols, y_val, y_pred_val, y_test, y_pred_test):
+    """Cria todos os gráficos necessários de forma simplificada."""
     
-    # Plota a evolução do melhor fitness
-    plt.plot(ga_instance.best_solutions_fitness, 'b-', label='Melhor Fitness')
-    
-    # Calcula e plota o fitness médio para cada geração
-    mean_fitness = []
-    std_fitness = []
-    for generation in range(len(ga_instance.best_solutions_fitness)):
-        # Obtém os fitness de todos os indivíduos na geração atual
-        if hasattr(ga_instance, 'population_fitness') and len(ga_instance.population_fitness) > generation:
-            population_fitness = ga_instance.population_fitness[generation]
-            mean_fitness.append(np.mean(population_fitness))
-            std_fitness.append(np.std(population_fitness))
-        else:
-            # Se não houver dados de população, usa apenas o melhor fitness
-            mean_fitness.append(ga_instance.best_solutions_fitness[generation])
-            std_fitness.append(0)
-    
-    # Plota a média e o desvio padrão
-    mean_fitness = np.array(mean_fitness)
-    std_fitness = np.array(std_fitness)
-    plt.plot(mean_fitness, 'r--', label='Fitness Médio')
-    plt.fill_between(range(len(mean_fitness)), 
-                    mean_fitness - std_fitness,
-                    mean_fitness + std_fitness,
-                    alpha=0.2, color='r', label='±1 Desvio Padrão')
-    
-    plt.xlabel('Geração', fontsize=12)
-    plt.ylabel('Fitness', fontsize=12)
-    plt.title('Evolução do Algoritmo Genético', fontsize=14)
-    plt.legend(fontsize=10)
-    plt.grid(True, linestyle='--', alpha=0.7)
-    
-    # Adiciona estatísticas
-    stats_text = f'Melhor Fitness: {ga_instance.best_solutions_fitness[-1]:.3f}\n'
-    stats_text += f'Fitness Final Médio: {mean_fitness[-1]:.3f}\n'
-    stats_text += f'Desvio Padrão Final: {std_fitness[-1]:.3f}\n'
-    stats_text += f'Gerações: {len(ga_instance.best_solutions_fitness)}'
-    
-    plt.text(0.05, 0.95, stats_text,
-             transform=plt.gca().transAxes,
-             bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray'),
-             fontsize=10)
-    
+    # 1. Evolução genética
+    plt.figure(figsize=(10, 6))
+    plt.plot(ga_instance.best_solutions_fitness, 'b-', linewidth=2, label='Melhor Fitness')
+    plt.xlabel('Geração')
+    plt.ylabel('Fitness')
+    plt.title('Evolução do Algoritmo Genético')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
     plt.tight_layout()
-    plot_path = output_dir / "genetic_evolution.png"
-    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    plt.savefig(OUTPUT_PLOTS / "genetic_evolution.png", dpi=300)
     plt.close()
-    logger.info(f"Gráfico de evolução genética salvo em {plot_path}")
-
-def plot_real_vs_pred(y_true, y_pred, conjunto, output_dir):
-    """Plota gráfico Real vs Previsto com melhorias visuais.
-
-    Args:
-        y_true: Valores reais.
-        y_pred: Valores previstos.
-        conjunto: Nome do conjunto.
-        output_dir: Pasta de saída.
-    """
-    plt.figure(figsize=(10, 8))
     
-    # Calcula métricas para o título
-    mse = np.mean((y_true - y_pred) ** 2)
-    r2 = r2_score(y_true, y_pred)
+    # 2. Importância das features
+    importance = 100 * np.abs(model.coef_) / np.abs(model.coef_).sum()
+    feature_names = [feature_cols[i] for i in selected_features]
     
-    # Plota os pontos
-    plt.scatter(y_true, y_pred, alpha=0.6, c='blue', label='Dados')
-    
-    # Linha de referência y=x
-    min_val = min(y_true.min(), y_pred.min())
-    max_val = max(y_true.max(), y_pred.max())
-    plt.plot([min_val, max_val], [min_val, max_val], 'r--', label='y = x')
-    
-    # Adiciona linha de regressão
-    z = np.polyfit(y_true, y_pred, 1)
-    p = np.poly1d(z)
-    plt.plot(y_true, p(y_true), "g--", alpha=0.8, label=f'Tendência (R² = {r2:.3f})')
-    
-    plt.xlabel('Valor Real', fontsize=12)
-    plt.ylabel('Valor Previsto', fontsize=12)
-    plt.title(f'Real vs Previsto (Genético) - {conjunto}\nMSE: {mse:.3f}, R²: {r2:.3f}', fontsize=14)
-    plt.legend(fontsize=10)
-    plt.grid(True, linestyle='--', alpha=0.7)
-    
-    # Adiciona texto com métricas
-    plt.text(0.05, 0.95, f'MSE: {mse:.3f}\nR²: {r2:.3f}', 
-             transform=plt.gca().transAxes, 
-             bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray'),
-             fontsize=10)
-    
+    plt.figure(figsize=(10, 6))
+    sorted_idx = np.argsort(importance)
+    plt.barh(range(len(importance)), importance[sorted_idx])
+    plt.yticks(range(len(importance)), [feature_names[i] for i in sorted_idx])
+    plt.xlabel('Importância (%)')
+    plt.title(f'Importância das Features (Total: {len(selected_features)})')
     plt.tight_layout()
-    plot_path = output_dir / f"real_vs_pred_{conjunto.lower()}_genetic.png"
-    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    plt.savefig(OUTPUT_PLOTS / "feature_importance_genetic.png", dpi=300)
     plt.close()
-    logger.info(f"Gráfico Real vs Previsto salvo em {plot_path}")
-
-def plot_residuals(y_true, y_pred, conjunto, output_dir):
-    """Plota resíduos vs valor previsto com melhorias visuais.
-
-    Args:
-        y_true: Valores reais.
-        y_pred: Valores previstos.
-        conjunto: Nome do conjunto.
-        output_dir: Pasta de saída.
-    """
-    residuals = y_true - y_pred
     
-    plt.figure(figsize=(10, 8))
+    # 3. Real vs Previsto (função simplificada)
+    for y_true, y_pred, nome in [(y_val, y_pred_val, 'validação'), (y_test, y_pred_test, 'teste')]:
+        plt.figure(figsize=(8, 6))
+        plt.scatter(y_true, y_pred, alpha=0.6)
+        min_val, max_val = min(y_true.min(), y_pred.min()), max(y_true.max(), y_pred.max())
+        plt.plot([min_val, max_val], [min_val, max_val], 'r--', label='y = x')
+        plt.xlabel('Valor Real')
+        plt.ylabel('Valor Previsto')
+        plt.title(f'Real vs Previsto - {nome.title()}')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(OUTPUT_PLOTS / f"real_vs_pred_{nome}_genetic.png", dpi=300)
+        plt.close()
+        
+        # Histograma dos resíduos
+        residuals = y_true - y_pred
+        plt.figure(figsize=(8, 6))
+        plt.hist(residuals, bins=20, alpha=0.7, edgecolor='black')
+        plt.xlabel('Resíduo')
+        plt.ylabel('Frequência')
+        plt.title(f'Distribuição dos Resíduos - {nome.title()}')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(OUTPUT_PLOTS / f"hist_residuos_{nome}_genetic.png", dpi=300)
+        plt.close()
     
-    # Plota os resíduos
-    plt.scatter(y_pred, residuals, alpha=0.6, c='blue', label='Resíduos')
-    
-    # Linha de referência y=0
-    plt.axhline(y=0, color='r', linestyle='--', label='Resíduo = 0')
-    
-    # Adiciona banda de confiança
-    std_residuals = np.std(residuals)
-    plt.axhline(y=2*std_residuals, color='gray', linestyle=':', alpha=0.5, label='±2σ')
-    plt.axhline(y=-2*std_residuals, color='gray', linestyle=':', alpha=0.5)
-    
-    plt.xlabel('Valor Previsto', fontsize=12)
-    plt.ylabel('Resíduo', fontsize=12)
-    plt.title(f'Análise de Resíduos (Genético) - {conjunto}\nDesvio Padrão: {std_residuals:.3f}', fontsize=14)
-    plt.legend(fontsize=10)
-    plt.grid(True, linestyle='--', alpha=0.7)
-    
-    # Adiciona estatísticas dos resíduos
-    stats_text = f'Média: {np.mean(residuals):.3f}\nDesvio: {std_residuals:.3f}'
-    plt.text(0.05, 0.95, stats_text,
-             transform=plt.gca().transAxes,
-             bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray'),
-             fontsize=10)
-    
-    plt.tight_layout()
-    plot_path = output_dir / f"residuos_vs_pred_{conjunto.lower()}_genetic.png"
-    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-    plt.close()
-    logger.info(f"Gráfico de resíduos salvo em {plot_path}")
-
-def plot_residuals_hist(y_true, y_pred, conjunto, output_dir):
-    """Plota histograma dos resíduos com melhorias visuais.
-
-    Args:
-        y_true: Valores reais.
-        y_pred: Valores previstos.
-        conjunto: Nome do conjunto.
-        output_dir: Pasta de saída.
-    """
-    residuals = y_true - y_pred
-    
-    plt.figure(figsize=(10, 8))
-    
-    # Plota histograma com KDE
-    sns.histplot(residuals, bins=30, kde=True, stat='density', color='blue', alpha=0.6)
-    
-    # Adiciona curva normal para comparação
-    x = np.linspace(residuals.min(), residuals.max(), 100)
-    normal = stats.norm.pdf(x, np.mean(residuals), np.std(residuals))
-    plt.plot(x, normal, 'r--', label='Distribuição Normal', alpha=0.8)
-    
-    # Adiciona linhas de referência
-    mean_res = np.mean(residuals)
-    std_res = np.std(residuals)
-    plt.axvline(mean_res, color='g', linestyle='-', label=f'Média: {mean_res:.3f}')
-    plt.axvline(mean_res + 2*std_res, color='r', linestyle=':', alpha=0.5, label='±2σ')
-    plt.axvline(mean_res - 2*std_res, color='r', linestyle=':', alpha=0.5)
-    
-    plt.xlabel('Resíduo', fontsize=12)
-    plt.ylabel('Densidade', fontsize=12)
-    plt.title(f'Distribuição dos Resíduos (Genético) - {conjunto}', fontsize=14)
-    plt.legend(fontsize=10)
-    plt.grid(True, linestyle='--', alpha=0.7)
-    
-    # Adiciona estatísticas
-    stats_text = f'Média: {mean_res:.3f}\nDesvio: {std_res:.3f}\nSkewness: {stats.skew(residuals):.3f}'
-    plt.text(0.05, 0.95, stats_text,
-             transform=plt.gca().transAxes,
-             bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray'),
-             fontsize=10)
-    
-    plt.tight_layout()
-    plot_path = output_dir / f"hist_residuos_{conjunto.lower()}_genetic.png"
-    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-    plt.close()
-    logger.info(f"Histograma dos resíduos salvo em {plot_path}")
+    logger.info(f"Gráficos salvos em {OUTPUT_PLOTS}")
 
 def optimize_hyperparameters(X_train, y_train, X_val, y_val, X_test, y_test, feature_cols, 
                             n_trials: int = 100, timeout: int = 3600) -> Dict[str, Any]:
@@ -1022,15 +727,8 @@ def run_with_optimization(optimize: bool = True, n_trials: int = 50) -> Dict[str
     # Salva resultados
     save_results_to_csv(metrics_val, metrics_test, OUTPUT_CSV, selected_names)
     
-    # Gera visualizações
-    plot_genetic_evolution(ga_instance, OUTPUT_PLOTS)
-    plot_feature_importance(model, selected_features, feature_cols, OUTPUT_PLOTS)
-    plot_real_vs_pred(y_val, y_pred_val, 'Validação', OUTPUT_PLOTS)
-    plot_residuals(y_val, y_pred_val, 'Validação', OUTPUT_PLOTS)
-    plot_residuals_hist(y_val, y_pred_val, 'Validação', OUTPUT_PLOTS)
-    plot_real_vs_pred(y_test, y_pred_test, 'Teste', OUTPUT_PLOTS)
-    plot_residuals(y_test, y_pred_test, 'Teste', OUTPUT_PLOTS)
-    plot_residuals_hist(y_test, y_pred_test, 'Teste', OUTPUT_PLOTS)
+    # Gera visualizações simplificadas
+    create_plots(ga_instance, model, selected_features, feature_cols, y_val, y_pred_val, y_test, y_pred_test)
     
     logger.info("✅ Pipeline concluído com sucesso!")
     

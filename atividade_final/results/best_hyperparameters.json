@@ -1,12 +1,12 @@
 {
   "best_params": {
-    "num_generations": 47,
-    "sol_per_pop": 57,
-    "K_tournament": 4,
-    "keep_parents": 13,
+    "num_generations": 69,
+    "sol_per_pop": 60,
+    "K_tournament": 5,
+    "keep_parents": 5,
     "cv_folds": 3,
-    "max_features": 97,
-    "feature_penalty": 0.17972290152754766
+    "max_features": 102,
+    "feature_penalty": 0.3444564934431268
   },
-  "best_score": 0.8106197243919504
+  "best_score": 0.808700819961774
 }
