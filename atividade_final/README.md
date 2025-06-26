@@ -25,10 +25,25 @@
    ```
 
 2. Execute os scripts principais:
-   ```
+   ```bash
+   # Baseline
    python baseline_mlr.py
+   
+   # Algoritmo genético com parâmetros padrão
    python genetic_mlr.py
+   
+   # Otimização de hiperparâmetros (NOVO!)
+   python genetic_mlr.py --optimize --trials 50
+   
+   # Script auxiliar para otimização (recomendado)
+   python optimize_hyperparams.py quick    # 30 trials
+   python optimize_hyperparams.py full     # 100 trials
+   python optimize_hyperparams.py best     # usar melhores parâmetros salvos
+   
+   # Comparação entre modelos
    python compare_results.py results/baseline/baseline_results.csv results/genetic/genetic_results.csv
+   
+   # Visualização exploratória
    python visualize_dataset.py
    ```
 
@@ -36,28 +51,56 @@
 
 O algoritmo genético (AG) é utilizado para selecionar automaticamente o subconjunto de features mais relevante para a regressão linear múltipla. Cada indivíduo da população é um vetor binário, onde cada bit indica se a feature correspondente é usada (1) ou não (0).
 
+### 🧬 Implementação Básica
+
 - **Modelagem do Cromossomo:**
   - Exemplo: `[1, 0, 1, 1]` (usa as features 1, 3 e 4)
-- **Fitness:**
-  - Calculado como: `1/(MSE) + 1/(MAE) + max(0, R²)`
-  - Quanto maior o fitness, melhor a solução.
-- **Parâmetros principais:**
-  - `num_generations`: número de gerações (ex: 30)
-  - `sol_per_pop`: tamanho da população (ex: 10)
-  - `mutation_percent_genes`: taxa de mutação (ex: 30%)
-  - `crossover_type`: tipo de cruzamento (ex: 'single_point')
-  - `stop_criteria`: critério de parada (ex: 'reach_10')
-- **Biblioteca:** PyGAD
-- **Como alterar parâmetros:**
-  - No arquivo `genetic_mlr.py`, edite a função `run_genetic_feature_selection`.
-  - Exemplo:
-    ```python
-    ga_instance = pygad.GA(
-        num_generations=50,  # Altere aqui
-        sol_per_pop=20,      # Altere aqui
-        ...
-    )
-    ```
+- **Fitness (Corrigido):**
+  - Calculado com cross-validation apenas no conjunto de treino
+  - Fórmula: `(R² + 1/MSE) / 2 × penalty_features`
+  - **Sem data leakage**: Validação/teste não são usados no fitness
+- **Restrições:**
+  - Máximo de 90 features selecionadas
+  - Seleção por torneio (K=4) no crossover
+  - Operadores customizados respeitam restrições
+
+### 🎯 Otimização Inteligente de Hiperparâmetros (NOVO!)
+
+Implementamos otimização automática usando **Optuna** (Bayesian Optimization):
+
+- **Hiperparâmetros otimizados:**
+  - `num_generations` (50-300)
+  - `sol_per_pop` (20-100) 
+  - `K_tournament` (2-8)
+  - `keep_parents` (2-20)
+  - `cv_folds` (3-10)
+  - `max_features` (30-150)
+  - `feature_penalty` (0.1-0.5)
+
+- **Função objetivo:** 70% R² + 30% parcimônia
+- **Estratégias:**
+  - **Quick**: 30 trials (~30 min)
+  - **Full**: 100 trials (~2h)
+  - **Best**: usa parâmetros salvos
+
+### ⚙️ Como Usar a Otimização
+
+```bash
+# Otimização rápida
+python optimize_hyperparams.py quick
+
+# Otimização completa  
+python optimize_hyperparams.py full
+
+# Usar melhores parâmetros encontrados
+python optimize_hyperparams.py best
+```
+
+**Arquivos gerados:**
+- `results/best_hyperparameters.json`: melhores parâmetros
+- `results/optuna_study.pkl`: histórico completo
+
+**Documentação completa:** [HYPERPARAMETER_OPTIMIZATION.md](HYPERPARAMETER_OPTIMIZATION.md)
 
 ## Métricas Calculadas
 
