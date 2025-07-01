@@ -26,10 +26,12 @@
 
 2. Execute os scripts principais:
    ```bash
-   # Baseline
+   # ======== EXECUÇÕES INDIVIDUAIS ========
+   
+   # Baseline (execução única)
    python baseline_mlr.py
    
-   # Algoritmo genético com parâmetros padrão
+   # Algoritmo genético com parâmetros padrão (execução única)
    python genetic_mlr.py
    
    # Otimização de hiperparâmetros (NOVO!)
@@ -40,7 +42,28 @@
    python optimize_hyperparams.py full     # 100 trials
    python optimize_hyperparams.py best     # usar melhores parâmetros salvos
    
-   # Comparação entre modelos
+   # ======== ANÁLISE ESTATÍSTICA (NOVO!) ========
+   
+   # Execução completa: 30 iterações + análise comparativa
+   python run_statistical_analysis.py
+   
+   # Executar apenas 30 iterações do Baseline MLR
+   python run_statistical_analysis.py --baseline-only
+   
+   # Executar apenas 30 iterações do Genetic MLR (com melhores parâmetros)
+   python run_statistical_analysis.py --genetic-only
+   
+   # Executar apenas análise dos resultados existentes
+   python run_statistical_analysis.py --analysis-only
+   
+   # Scripts individuais de múltiplas execuções
+   python baseline_mlr_multiple_runs.py    # 30 execuções do baseline
+   python genetic_mlr_multiple_runs.py     # 30 execuções do genético
+   python analyze_multiple_runs.py         # análise com boxplots
+   
+   # ======== OUTROS ========
+   
+   # Comparação entre modelos (execução única)
    python compare_results.py results/baseline/baseline_results.csv results/genetic/genetic_results.csv
    
    # Visualização exploratória
@@ -101,6 +124,83 @@ python optimize_hyperparams.py best
 - `results/optuna_study.pkl`: histórico completo
 
 **Documentação completa:** [HYPERPARAMETER_OPTIMIZATION.md](HYPERPARAMETER_OPTIMIZATION.md)
+
+## 📊 Análise Estatística com Múltiplas Execuções (NOVO!)
+
+Para obter resultados estatisticamente robustos, implementamos scripts que executam **30 iterações** de cada algoritmo e geram análises comparativas detalhadas.
+
+### Scripts de Múltiplas Execuções
+
+1. **`baseline_mlr_multiple_runs.py`**
+   - Executa o MLR baseline 30 vezes
+   - Salva todas as métricas em formato estruturado
+   - Gera estatísticas resumo (média, desvio, quartis)
+
+2. **`genetic_mlr_multiple_runs.py`**  
+   - Executa o algoritmo genético 30 vezes usando os **melhores parâmetros** encontrados
+   - Inclui análise do número de features selecionadas
+   - Salva fitness evolution para cada execução
+
+3. **`analyze_multiple_runs.py`**
+   - Cria **boxplots comparativos** entre baseline e genético
+   - Gera plots individuais para cada métrica (R², MSE, MAE, etc.)
+   - Análise específica da seleção de features (distribuição, correlação com performance)
+   - Tabela de estatísticas descritivas completa
+
+4. **`run_statistical_analysis.py`** (Script Principal)
+   - Orquestra toda a análise estatística
+   - Execução inteligente com estimativa de tempo
+   - Verificação de pré-requisitos
+   - Opções flexíveis (apenas baseline, apenas genético, apenas análise)
+
+### Como Usar
+
+```bash
+# Análise completa (RECOMENDADO)
+python run_statistical_analysis.py
+# ⏱️ Tempo estimado: 70-140 minutos
+
+# Execuções parciais
+python run_statistical_analysis.py --baseline-only  # ~5-10 min
+python run_statistical_analysis.py --genetic-only   # ~60-120 min  
+python run_statistical_analysis.py --analysis-only  # ~2-5 min
+```
+
+### Resultados Gerados
+
+**Estrutura de pastas criada:**
+```
+results/
+├── multiple_runs/          # Dados das 30 execuções
+│   ├── baseline_mlr_30_runs_YYYYMMDD_HHMMSS.csv
+│   ├── baseline_mlr_30_runs_YYYYMMDD_HHMMSS.json
+│   ├── baseline_mlr_summary_stats_YYYYMMDD_HHMMSS.json
+│   ├── genetic_mlr_30_runs_YYYYMMDD_HHMMSS.csv
+│   ├── genetic_mlr_30_runs_YYYYMMDD_HHMMSS.json
+│   └── genetic_mlr_summary_stats_YYYYMMDD_HHMMSS.json
+└── analysis_plots/         # Visualizações comparativas
+    ├── comparison_boxplots_YYYYMMDD_HHMMSS.png
+    ├── r2_analysis_YYYYMMDD_HHMMSS.png
+    ├── mse_analysis_YYYYMMDD_HHMMSS.png
+    ├── features_analysis_YYYYMMDD_HHMMSS.png
+    └── statistical_summary_YYYYMMDD_HHMMSS.csv
+```
+
+**Tipos de análise:**
+- **Boxplots comparativos**: Distribuição de todas as métricas
+- **Violin plots**: Distribuição detalhada das performances  
+- **Análise de features**: Número ótimo, correlação com R²
+- **Estatísticas descritivas**: Média, desvio, quartis, min/max
+- **Teste de significância**: Comparação estatística entre algoritmos
+
+### Vantagens da Análise Estatística
+
+✅ **Base estatística robusta** (30 execuções vs 1 execução)  
+✅ **Quantificação da variabilidade** dos algoritmos  
+✅ **Comparação objetiva** com intervalos de confiança  
+✅ **Identificação de outliers** e comportamentos anômalos  
+✅ **Análise de estabilidade** dos algoritmos  
+✅ **Visualizações profissionais** para relatórios  
 
 ## Métricas Calculadas
 

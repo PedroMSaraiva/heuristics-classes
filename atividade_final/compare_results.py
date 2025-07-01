@@ -52,7 +52,7 @@ def main():
     parser.add_argument('csvs', nargs='+', help='Caminhos dos arquivos CSV de resultados')
     args = parser.parse_args()
     all_results = load_results(args.csvs)
-    metrics = ['MSE','MAE','R2','Bias','RMSE','SE']
+    metrics = ['MSE','MAE','R2','BIAS','RMSE','SE']
     pivot = all_results.pivot(index='Conjunto', columns='Experimento', values=metrics)
     logger.info('\nResumo das métricas:')
     logger.info(pivot)
